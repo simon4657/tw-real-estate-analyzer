@@ -36,12 +36,14 @@ else:
     districts = ["全部"] + list(df['鄉鎮市區'].dropna().unique())
     selected_district = st.sidebar.selectbox("選擇鄉鎮市區", districts)
     
-    # 主要用途篩選 (過濾出買賣與租賃共有的主要用途，並加入關鍵字簡化選項)
-    all_usages = sorted(list(set(df['主要用途'].dropna().unique()) | set(rent_df['主要用途'].dropna().unique())))
-    # 我們可以將一些常見用途特別標出
+    # 主要用途篩選
+    all_usages = sorted(list(set(df['主要用途'].dropna().unique()) | set(rent_df['主要用途'].dropna().unique() if not rent_df.empty else [])))
     usage_options = ["全部", "住家用", "商業用", "工業用"] + [u for u in all_usages if u not in ["住家用", "商業用", "工業用", "全部"]]
-    
     selected_usage = st.sidebar.selectbox("主要用途篩選", usage_options)
+    
+    # 坪數篩選
+    ping_options = ["全部", "15坪以下 (小套房/雅房)", "15-30坪 (兩房)", "30-50坪 (三房以上)", "50坪以上 (大坪數)"]
+    selected_ping = st.sidebar.selectbox("室內/租賃坪數篩選", ping_options)
     
     # 執行篩選邏輯
     if selected_district != "全部":
@@ -50,10 +52,27 @@ else:
             rent_df = rent_df[rent_df['鄉鎮市區'] == selected_district]
             
     if selected_usage != "全部":
-        # 由於實價登錄文字有時含有「住家用」、「見其他登記事項」等模糊字眼，使用包含關鍵字搜尋
         df = df[df['主要用途'].str.contains(selected_usage, na=False)]
         if not rent_df.empty:
             rent_df = rent_df[rent_df['主要用途'].str.contains(selected_usage, na=False)]
+            
+    # 執行坪數篩選邏輯
+    if selected_ping != "全部":
+        def filter_by_ping(data, col_name):
+            if col_name not in data.columns: return data
+            if selected_ping == "15坪以下 (小套房/雅房)":
+                return data[data[col_name] <= 15]
+            elif selected_ping == "15-30坪 (兩房)":
+                return data[(data[col_name] > 15) & (data[col_name] <= 30)]
+            elif selected_ping == "30-50坪 (三房以上)":
+                return data[(data[col_name] > 30) & (data[col_name] <= 50)]
+            elif selected_ping == "50坪以上 (大坪數)":
+                return data[data[col_name] > 50]
+            return data
+            
+        df = filter_by_ping(df, '總坪數')
+        if not rent_df.empty:
+            rent_df = filter_by_ping(rent_df, '租賃坪數')
 
     if df.empty:
         st.warning("⚠️ 在您選擇的條件下，該季度沒有任何買賣交易紀錄。")
@@ -88,6 +107,8 @@ else:
                         temp_df = temp_df[temp_df['鄉鎮市區'] == selected_district]
                     if selected_usage != "全部":
                         temp_df = temp_df[temp_df['主要用途'].str.contains(selected_usage, na=False)]
+                    if selected_ping != "全部":
+                        temp_df = filter_by_ping(temp_df, '總坪數')
                         
                     if not temp_df.empty:
                         temp_df['季度'] = s
@@ -98,6 +119,8 @@ else:
                         temp_rent = temp_rent[temp_rent['鄉鎮市區'] == selected_district]
                     if selected_usage != "全部":
                         temp_rent = temp_rent[temp_rent['主要用途'].str.contains(selected_usage, na=False)]
+                    if selected_ping != "全部":
+                        temp_rent = filter_by_ping(temp_rent, '租賃坪數')
                         
                     if not temp_rent.empty:
                         temp_rent['季度'] = s
@@ -131,6 +154,9 @@ else:
                 if full_df is not None and not full_df.empty:
                     if selected_usage != "全部":
                         full_df = full_df[full_df['主要用途'].str.contains(selected_usage, na=False)]
+                    if selected_ping != "全部":
+                        full_df = filter_by_ping(full_df, '總坪數')
+                        
                     if not full_df.empty:
                         district_avg = full_df.groupby('鄉鎮市區')['單價萬坪'].mean().reset_index()
                         district_avg = district_avg.sort_values(by='單價萬坪', ascending=False)
@@ -146,6 +172,8 @@ else:
                 if not full_rent.empty:
                     if selected_usage != "全部":
                         full_rent = full_rent[full_rent['主要用途'].str.contains(selected_usage, na=False)]
+                    if selected_ping != "全部":
+                        full_rent = filter_by_ping(full_rent, '租賃坪數')
                         
                     if not full_rent.empty and not full_df.empty:
                         dist_rent = full_rent.groupby('鄉鎮市區')['租金單價坪'].mean()

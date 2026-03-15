@@ -20,21 +20,29 @@ def load_real_estate_data(season="114S1", city_code="a"):
                     if df.empty: return pd.DataFrame()
                     df = df.iloc[1:].copy()
                     
-                    # 篩選需要的欄位
                     cols = ['鄉鎮市區', '主要用途', '交易年月日', '總價元', '單價元平方公尺', '建物移轉總面積平方公尺']
-                    df = df[[c for c in cols if c in df.columns]]
+                    available_cols = [c for c in cols if c in df.columns]
+                    df = df[available_cols]
                     
-                    # 針對主要用途處理，若無資料填補「未標示」
                     if '主要用途' not in df.columns:
                         df['主要用途'] = '未標示'
                     else:
                         df['主要用途'] = df['主要用途'].fillna('未標示')
                     
-                    df['總價元'] = pd.to_numeric(df['總價元'], errors='coerce')
-                    df['單價元平方公尺'] = pd.to_numeric(df['單價元平方公尺'], errors='coerce')
-                    df['單價萬坪'] = (df['單價元平方公尺'] / 0.3025) / 10000
-                    df = df.dropna(subset=['單價萬坪'])
-                    df['單價萬坪'] = df['單價萬坪'].round(1)
+                    if '總價元' in df.columns:
+                        df['總價元'] = pd.to_numeric(df['總價元'], errors='coerce')
+                    if '單價元平方公尺' in df.columns:
+                        df['單價元平方公尺'] = pd.to_numeric(df['單價元平方公尺'], errors='coerce')
+                        df['單價萬坪'] = (df['單價元平方公尺'] / 0.3025) / 10000
+                        df = df.dropna(subset=['單價萬坪'])
+                        df['單價萬坪'] = df['單價萬坪'].round(1)
+                    else:
+                        df['單價萬坪'] = pd.Series(dtype=float)
+                        
+                    if '建物移轉總面積平方公尺' in df.columns:
+                        df['建物移轉總面積平方公尺'] = pd.to_numeric(df['建物移轉總面積平方公尺'], errors='coerce')
+                        df['總坪數'] = (df['建物移轉總面積平方公尺'] * 0.3025).round(1)
+                        
                     return df
             else:
                 return pd.DataFrame()
@@ -56,20 +64,31 @@ def load_rent_data(season="114S1", city_code="a"):
                     if df.empty: return pd.DataFrame()
                     df = df.iloc[1:].copy()
                     
-                    # 篩選需要的欄位
-                    cols = ['鄉鎮市區', '主要用途', '交易年月日', '總額元', '單價元平方公尺', '建物移轉總面積平方公尺']
-                    df = df[[c for c in cols if c in df.columns]]
+                    # 租賃資料的面積欄位通常為「建物總面積平方公尺」
+                    cols = ['鄉鎮市區', '主要用途', '租賃年月日', '總額元', '單價元平方公尺', '建物總面積平方公尺', '建物現況格局-房', '建物現況格局-廳']
+                    available_cols = [c for c in cols if c in df.columns]
+                    df = df[available_cols]
                     
                     if '主要用途' not in df.columns:
                         df['主要用途'] = '未標示'
                     else:
                         df['主要用途'] = df['主要用途'].fillna('未標示')
                     
-                    df['總額元'] = pd.to_numeric(df['總額元'], errors='coerce') 
-                    df['單價元平方公尺'] = pd.to_numeric(df['單價元平方公尺'], errors='coerce')
-                    df['租金單價坪'] = df['單價元平方公尺'] / 0.3025
-                    df = df.dropna(subset=['租金單價坪'])
-                    df['租金單價坪'] = df['租金單價坪'].round(0)
+                    if '總額元' in df.columns:
+                        df['總額元'] = pd.to_numeric(df['總額元'], errors='coerce') 
+                    if '單價元平方公尺' in df.columns:
+                        df['單價元平方公尺'] = pd.to_numeric(df['單價元平方公尺'], errors='coerce')
+                        df['租金單價坪'] = df['單價元平方公尺'] / 0.3025
+                        df = df.dropna(subset=['租金單價坪'])
+                        df['租金單價坪'] = df['租金單價坪'].round(0)
+                    else:
+                        df['租金單價坪'] = pd.Series(dtype=float)
+                        
+                    # 計算租賃坪數
+                    if '建物總面積平方公尺' in df.columns:
+                        df['建物總面積平方公尺'] = pd.to_numeric(df['建物總面積平方公尺'], errors='coerce')
+                        df['租賃坪數'] = (df['建物總面積平方公尺'] * 0.3025).round(1)
+                        
                     return df
             else:
                 return pd.DataFrame()
