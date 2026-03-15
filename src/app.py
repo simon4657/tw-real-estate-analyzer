@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from data_pipeline import load_real_estate_data, load_rent_data
+from data_pipeline import load_real_estate_data_v2, load_rent_data_v2
 
 st.set_page_config(page_title="台灣實價登錄分析系統", layout="wide")
 st.title("📈 台灣實價登錄房價與租金分析系統")
@@ -26,8 +26,8 @@ if st.sidebar.button("清除資料快取"):
 
 city_code = city_mapping[city]
 with st.spinner(f"正在抓取 {city} {season} 的實價登錄(買賣/租賃)資料..."):
-    df = load_real_estate_data(season=season, city_code=city_code)
-    rent_df = load_rent_data(season=season, city_code=city_code)
+    df = load_real_estate_data_v2(season=season, city_code=city_code)
+    rent_df = load_rent_data_v2(season=season, city_code=city_code)
 
 if df is None or df.empty:
     st.error(f"⚠️ 無法獲取 {season} 的買賣資料，可能內政部伺服器維護中。")
@@ -60,6 +60,11 @@ else:
     if selected_ping != "全部":
         def filter_by_ping(data, col_name):
             if col_name not in data.columns: return data
+            
+            # 使用 pd.to_numeric 確保格式正確，並過濾掉沒有坪數的髒資料
+            data[col_name] = pd.to_numeric(data[col_name], errors='coerce')
+            data = data.dropna(subset=[col_name])
+            
             if selected_ping == "15坪以下 (小套房/雅房)":
                 return data[data[col_name] <= 15]
             elif selected_ping == "15-30坪 (兩房)":
@@ -99,8 +104,8 @@ else:
             trend_dfs = []
             rent_trend_dfs = []
             for s in reversed(all_seasons_list):
-                temp_df = load_real_estate_data(season=s, city_code=city_code)
-                temp_rent = load_rent_data(season=s, city_code=city_code)
+                temp_df = load_real_estate_data_v2(season=s, city_code=city_code)
+                temp_rent = load_rent_data_v2(season=s, city_code=city_code)
                 
                 if temp_df is not None and not temp_df.empty:
                     if selected_district != "全部":
@@ -150,7 +155,7 @@ else:
         with col_chart1:
             st.subheader("各行政區買賣均價 (萬/坪)")
             if selected_district == "全部":
-                full_df = load_real_estate_data(season=season, city_code=city_code)
+                full_df = load_real_estate_data_v2(season=season, city_code=city_code)
                 if full_df is not None and not full_df.empty:
                     if selected_usage != "全部":
                         full_df = full_df[full_df['主要用途'].str.contains(selected_usage, na=False)]
@@ -168,7 +173,7 @@ else:
         with col_chart2:
             st.subheader("各行政區估算毛投報率 (%)")
             if selected_district == "全部" and not rent_df.empty:
-                full_rent = load_rent_data(season=season, city_code=city_code)
+                full_rent = load_rent_data_v2(season=season, city_code=city_code)
                 if not full_rent.empty:
                     if selected_usage != "全部":
                         full_rent = full_rent[full_rent['主要用途'].str.contains(selected_usage, na=False)]
@@ -196,7 +201,19 @@ else:
                 st.info("已選擇單一行政區，不顯示跨區比較。")
                 
         st.subheader(f"📄 最新買賣交易明細 ({selected_usage} 節錄)")
-        st.dataframe(df.head(10), use_container_width=True)
+        # 加入坪數顯示
+        cols_to_show_buy = ['鄉鎮市區', '主要用途', '交易年月日', '單價萬坪']
+        if '總坪數' in df.columns: cols_to_show_buy.append('總坪數')
+        cols_to_show_buy.append('總價元')
+        st.dataframe(df[cols_to_show_buy].head(10), use_container_width=True)
+        
         if not rent_df.empty:
             st.subheader(f"📄 最新租賃交易明細 ({selected_usage} 節錄)")
-            st.dataframe(rent_df.head(10), use_container_width=True)
+            cols_to_show_rent = ['鄉鎮市區', '主要用途', '租賃年月日', '租金單價坪']
+            if '租賃坪數' in rent_df.columns: cols_to_show_rent.append('租賃坪數')
+            if '建物現況格局-房' in rent_df.columns: cols_to_show_rent.append('建物現況格局-房')
+            if '建物現況格局-廳' in rent_df.columns: cols_to_show_rent.append('建物現況格局-廳')
+            cols_to_show_rent.append('總額元')
+            # 確保欄位存在再顯示
+            cols_to_show_rent = [c for c in cols_to_show_rent if c in rent_df.columns]
+            st.dataframe(rent_df[cols_to_show_rent].head(10), use_container_width=True)

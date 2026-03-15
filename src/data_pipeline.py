@@ -6,7 +6,7 @@ import os
 import streamlit as st
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def load_real_estate_data(season="114S1", city_code="a"):
+def load_real_estate_data_v2(season="114S1", city_code="a"):
     url = f"https://plvr.land.moi.gov.tw/DownloadSeason?season={season}&type=zip&fileName=lvr_landcsv.zip"
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
@@ -50,7 +50,7 @@ def load_real_estate_data(season="114S1", city_code="a"):
         return pd.DataFrame()
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def load_rent_data(season="114S1", city_code="a"):
+def load_rent_data_v2(season="114S1", city_code="a"):
     url = f"https://plvr.land.moi.gov.tw/DownloadSeason?season={season}&type=zip&fileName=lvr_landcsv.zip"
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
@@ -88,9 +88,12 @@ def load_rent_data(season="114S1", city_code="a"):
                     if '建物總面積平方公尺' in df.columns:
                         df['建物總面積平方公尺'] = pd.to_numeric(df['建物總面積平方公尺'], errors='coerce')
                         df['租賃坪數'] = (df['建物總面積平方公尺'] * 0.3025).round(1)
+                    else:
+                        df['租賃坪數'] = pd.Series(dtype=float)
                         
                     return df
             else:
                 return pd.DataFrame()
-    except Exception:
+    except Exception as e:
+        print("Error fetching rent data:", e)
         return pd.DataFrame()
