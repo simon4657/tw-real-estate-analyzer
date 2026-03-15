@@ -5,7 +5,7 @@ from data_pipeline import fetch_and_clean_data
 
 st.set_page_config(page_title="台灣實價登錄分析系統", layout="wide")
 st.title("📈 台灣實價登錄房價分析系統")
-st.markdown("本系統自動抓取內政部實價登錄資料，並分析各地區之房價漲跌趨勢。")
+st.markdown("自動抓取內政部實價登錄資料，協助分析各區房價趨勢與潛力投資區塊。")
 
 st.sidebar.header("條件篩選")
 city_mapping = {
@@ -17,15 +17,17 @@ city_mapping = {
     "高雄市": "e"
 }
 city = st.sidebar.selectbox("選擇縣市", list(city_mapping.keys()))
-season = st.sidebar.selectbox("資料季度", ["113S1", "112S4", "112S3"])
+
+# 擴充季別選項，包含最新季度
+season = st.sidebar.selectbox("資料季度", ["113S3", "113S2", "113S1", "112S4", "112S3"])
 
 # 自動抓取並快取內政部最新一季資料
 city_code = city_mapping[city]
-with st.spinner(f"正在抓取 {city} {season} 的實價登錄資料..."):
+with st.spinner(f"正在抓取 {city} {season} 的實價登錄資料... (可能需要10-20秒)"):
     df = fetch_and_clean_data(season=season, city_code=city_code)
 
-if df.empty:
-    st.warning("⚠️ 無法獲取該季度的資料，請確認內政部伺服器狀態或選擇其他季度。")
+if df is None or df.empty:
+    st.error(f"⚠️ 無法獲取 {season} 的資料。內政部伺服器可能正在維護，或該季資料尚未完整發布，請嘗試選擇前一季度。")
 else:
     # 根據選定的鄉鎮市區進行進階篩選
     districts = ["全部"] + list(df['鄉鎮市區'].dropna().unique())
@@ -41,8 +43,8 @@ else:
     total_volume = len(df)
     
     col1, col2, col3 = st.columns(3)
-    col1.metric("當前平均單價 (萬/坪)", f"{avg_price:.1f}" if pd.notna(avg_price) else "無資料", "季變動待計算")
-    col2.metric("該季總交易筆數", f"{total_volume} 筆", "分析中...")
+    col1.metric("當前平均單價 (萬/坪)", f"{avg_price:.1f}" if pd.notna(avg_price) else "無資料", "季變動待擴充")
+    col2.metric("該季總交易筆數", f"{total_volume} 筆", "指標分析中...")
     col3.metric("最高單價 (萬/坪)", f"{df['單價萬坪'].max():.1f}" if not df.empty else "無", "")
 
     st.markdown("---")
