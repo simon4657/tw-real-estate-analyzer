@@ -19,7 +19,11 @@ city_mapping = {
 }
 city = st.sidebar.selectbox("選擇縣市", list(city_mapping.keys()))
 
-all_seasons_list = ["113S4", "113S3", "113S2", "113S1", "112S4", "112S3"]
+# 擴增季度選項包含 115年 及 114年
+all_seasons_list = [
+    "115S1", "114S4", "114S3", "114S2", "114S1",
+    "113S4", "113S3", "113S2", "113S1", "112S4"
+]
 season = st.sidebar.selectbox("資料季度 (主要分析標的)", all_seasons_list)
 
 if st.sidebar.button("清除資料快取"):
@@ -67,7 +71,7 @@ else:
             history_df = pd.concat(trend_dfs, ignore_index=True)
             trend_avg = history_df.groupby('季度')['單價萬坪'].mean().reset_index()
             
-            st.subheader(f"📈 {city} {selected_district if selected_district != '全部' else '全市'} - 歷史平均單價推移 (近六季)")
+            st.subheader(f"📈 {city} {selected_district if selected_district != '全部' else '全市'} - 歷史平均單價推移")
             fig_trend = px.line(trend_avg, x='季度', y='單價萬坪', markers=True, text='單價萬坪')
             fig_trend.update_traces(textposition="bottom right", texttemplate='%{text:.1f}')
             fig_trend.update_layout(xaxis_title="季度", yaxis_title="平均單價 (萬/坪)", yaxis=dict(range=[trend_avg['單價萬坪'].min()*0.9, trend_avg['單價萬坪'].max()*1.1]))
