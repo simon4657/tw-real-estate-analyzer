@@ -6,26 +6,21 @@ import os
 import streamlit as st
 
 @st.cache_data(ttl=86400)
-def fetch_and_clean_data(season="113S3", city_code="a"):
+def fetch_and_clean_data(season="113S4", city_code="a"):
     """
     從內政部實價登錄下載特定季度的交易資料
-    season: 如 113S3 代表 113年第3季 (最新一季)
+    season: 如 113S4 代表 113年第4季
     city_code: a=台北市, f=新北市, h=桃園市, b=台中市, d=台南市, e=高雄市
     """
-    # 內政部API最新格式通常為 https://plvr.land.moi.gov.tw/DownloadSeason?season=113S3&type=zip&fileName=lvr_ru_113S3.zip
-    url = f"https://plvr.land.moi.gov.tw/DownloadSeason?season={season}&type=zip&fileName=lvr_ru_{season}.zip"
+    # 內政部API歷年資料格式，fileName皆為lvr_landcsv.zip
+    url = f"https://plvr.land.moi.gov.tw/DownloadSeason?season={season}&type=zip&fileName=lvr_landcsv.zip"
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
     try:
         response = requests.get(url, headers=headers, timeout=20)
-        
-        # 如果上方URL無效，嘗試使用不帶fileName的備用URL
-        if response.status_code != 200:
-            fallback_url = f"https://plvr.land.moi.gov.tw/DownloadSeason?season={season}&type=zip"
-            response = requests.get(fallback_url, headers=headers, timeout=20)
-            response.raise_for_status()
+        response.raise_for_status()
             
         target_filename = f"{city_code}_lvr_land_a.csv"
         

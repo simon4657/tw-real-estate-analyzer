@@ -19,7 +19,7 @@ city_mapping = {
 city = st.sidebar.selectbox("選擇縣市", list(city_mapping.keys()))
 
 # 擴充季別選項，包含最新季度
-season = st.sidebar.selectbox("資料季度", ["113S3", "113S2", "113S1", "112S4", "112S3"])
+season = st.sidebar.selectbox("資料季度", ["113S4", "113S3", "113S2", "113S1", "112S4", "112S3"])
 
 # 自動抓取並快取內政部最新一季資料
 city_code = city_mapping[city]
