@@ -8,7 +8,7 @@ import streamlit as st
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_real_estate_data(season="113S4", city_code="a"):
     """
-    從內政部實價登錄下載特定季度的交易資料 (函式更名以清除舊的快取)
+    從內政部實價登錄下載特定季度的交易資料
     season: 如 113S4 代表 113年第4季
     city_code: a=台北市, f=新北市, h=桃園市, b=台中市, d=台南市, e=高雄市
     """

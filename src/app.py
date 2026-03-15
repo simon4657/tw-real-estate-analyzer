@@ -19,7 +19,8 @@ city_mapping = {
 }
 city = st.sidebar.selectbox("選擇縣市", list(city_mapping.keys()))
 
-season = st.sidebar.selectbox("資料季度", ["113S4", "113S3", "113S2", "113S1", "112S4", "112S3"])
+all_seasons_list = ["113S4", "113S3", "113S2", "113S1", "112S4", "112S3"]
+season = st.sidebar.selectbox("資料季度 (主要分析標的)", all_seasons_list)
 
 if st.sidebar.button("清除資料快取"):
     st.cache_data.clear()
@@ -38,15 +39,39 @@ else:
     if selected_district != "全部":
         df = df[df['鄉鎮市區'] == selected_district]
 
-    st.subheader("📊 趨勢分析指標")
+    st.subheader("📊 當季趨勢分析指標")
     
     avg_price = df['單價萬坪'].mean()
     total_volume = len(df)
     
     col1, col2, col3 = st.columns(3)
-    col1.metric("當前平均單價 (萬/坪)", f"{avg_price:.1f}" if pd.notna(avg_price) else "無資料", "季變動待擴充")
-    col2.metric("該季總交易筆數", f"{total_volume} 筆", "指標分析中...")
+    col1.metric("當前平均單價 (萬/坪)", f"{avg_price:.1f}" if pd.notna(avg_price) else "無資料", "歷史趨勢請見下圖")
+    col2.metric("該季總交易筆數", f"{total_volume} 筆", "")
     col3.metric("最高單價 (萬/坪)", f"{df['單價萬坪'].max():.1f}" if not df.empty else "無", "")
+
+    st.markdown("---")
+    
+    # --- 歷史趨勢圖模組 ---
+    with st.spinner("正在載入歷史趨勢資料..."):
+        trend_dfs = []
+        # 將季度反轉，讓圖表時間軸由舊到新 (左到右)
+        for s in reversed(all_seasons_list):
+            temp_df = load_real_estate_data(season=s, city_code=city_code)
+            if temp_df is not None and not temp_df.empty:
+                if selected_district != "全部":
+                    temp_df = temp_df[temp_df['鄉鎮市區'] == selected_district]
+                temp_df['季度'] = s
+                trend_dfs.append(temp_df)
+                
+        if trend_dfs:
+            history_df = pd.concat(trend_dfs, ignore_index=True)
+            trend_avg = history_df.groupby('季度')['單價萬坪'].mean().reset_index()
+            
+            st.subheader(f"📈 {city} {selected_district if selected_district != '全部' else '全市'} - 歷史平均單價推移 (近六季)")
+            fig_trend = px.line(trend_avg, x='季度', y='單價萬坪', markers=True, text='單價萬坪')
+            fig_trend.update_traces(textposition="bottom right", texttemplate='%{text:.1f}')
+            fig_trend.update_layout(xaxis_title="季度", yaxis_title="平均單價 (萬/坪)", yaxis=dict(range=[trend_avg['單價萬坪'].min()*0.9, trend_avg['單價萬坪'].max()*1.1]))
+            st.plotly_chart(fig_trend, use_container_width=True)
 
     st.markdown("---")
     
@@ -55,16 +80,20 @@ else:
     with col_chart1:
         st.subheader("各行政區平均單價 (萬/坪)")
         if selected_district == "全部":
-            district_avg = df.groupby('鄉鎮市區')['單價萬坪'].mean().reset_index()
-            district_avg = district_avg.sort_values(by='單價萬坪', ascending=False)
-            fig1 = px.bar(district_avg, x='鄉鎮市區', y='單價萬坪', text_auto='.1f', title=f"{city} 各區平均房價")
-            st.plotly_chart(fig1, use_container_width=True)
+            # 這裡重新用未過濾行政區的 df 來畫圖，避免 selected_district 邏輯覆蓋
+            full_df = load_real_estate_data(season=season, city_code=city_code)
+            if full_df is not None and not full_df.empty:
+                district_avg = full_df.groupby('鄉鎮市區')['單價萬坪'].mean().reset_index()
+                district_avg = district_avg.sort_values(by='單價萬坪', ascending=False)
+                fig1 = px.bar(district_avg, x='鄉鎮市區', y='單價萬坪', text_auto='.1f')
+                fig1.update_layout(xaxis_title="鄉鎮市區", yaxis_title="平均單價 (萬/坪)")
+                st.plotly_chart(fig1, use_container_width=True)
         else:
             st.info("已選擇單一行政區，不顯示跨區比較。")
 
     with col_chart2:
-        st.subheader("單價分佈直方圖")
-        fig2 = px.histogram(df, x="單價萬坪", nbins=50, title=f"{city} {selected_district} 房價分佈")
+        st.subheader("當季單價分佈直方圖")
+        fig2 = px.histogram(df, x="單價萬坪", nbins=50)
         fig2.update_layout(xaxis_title="單價 (萬/坪)", yaxis_title="交易筆數")
         st.plotly_chart(fig2, use_container_width=True)
         
