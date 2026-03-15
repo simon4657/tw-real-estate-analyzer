@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from data_pipeline import fetch_and_clean_data
+from data_pipeline import load_real_estate_data
 
+# 清除快取的按鈕
 st.set_page_config(page_title="台灣實價登錄分析系統", layout="wide")
 st.title("📈 台灣實價登錄房價分析系統")
 st.markdown("自動抓取內政部實價登錄資料，協助分析各區房價趨勢與潛力投資區塊。")
@@ -18,18 +19,19 @@ city_mapping = {
 }
 city = st.sidebar.selectbox("選擇縣市", list(city_mapping.keys()))
 
-# 擴充季別選項，包含最新季度
 season = st.sidebar.selectbox("資料季度", ["113S4", "113S3", "113S2", "113S1", "112S4", "112S3"])
 
-# 自動抓取並快取內政部最新一季資料
+if st.sidebar.button("清除資料快取"):
+    st.cache_data.clear()
+    st.success("快取已清除！")
+
 city_code = city_mapping[city]
 with st.spinner(f"正在抓取 {city} {season} 的實價登錄資料... (可能需要10-20秒)"):
-    df = fetch_and_clean_data(season=season, city_code=city_code)
+    df = load_real_estate_data(season=season, city_code=city_code)
 
 if df is None or df.empty:
     st.error(f"⚠️ 無法獲取 {season} 的資料。內政部伺服器可能正在維護，或該季資料尚未完整發布，請嘗試選擇前一季度。")
 else:
-    # 根據選定的鄉鎮市區進行進階篩選
     districts = ["全部"] + list(df['鄉鎮市區'].dropna().unique())
     selected_district = st.sidebar.selectbox("選擇鄉鎮市區", districts)
     
@@ -38,7 +40,6 @@ else:
 
     st.subheader("📊 趨勢分析指標")
     
-    # 計算平均單價與交易量
     avg_price = df['單價萬坪'].mean()
     total_volume = len(df)
     
@@ -49,7 +50,6 @@ else:
 
     st.markdown("---")
     
-    # 視覺化圖表
     col_chart1, col_chart2 = st.columns(2)
     
     with col_chart1:
