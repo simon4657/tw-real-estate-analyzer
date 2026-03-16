@@ -45,10 +45,15 @@ else:
     districts = ["全部"] + list(df['鄉鎮市區'].dropna().unique())
     selected_district = st.sidebar.selectbox("選擇鄉鎮市區", districts)
     
-    # 主要用途篩選
-    all_usages = sorted(list(set(df['主要用途'].dropna().unique()) | set(rent_df['主要用途'].dropna().unique() if not rent_df.empty else [])))
-    usage_options = ["全部", "住家用", "商業用", "工業用"] + [u for u in all_usages if u not in ["住家用", "商業用", "工業用", "全部"]]
-    selected_usage = st.sidebar.selectbox("主要用途篩選", usage_options)
+    # 買賣主要用途篩選
+    all_usages_buy = sorted(list(set(df['主要用途'].dropna().unique())))
+    usage_options_buy = ["全部", "住家用", "商業用", "工業用"] + [u for u in all_usages_buy if u not in ["住家用", "商業用", "工業用", "全部"]]
+    selected_usage_buy = st.sidebar.selectbox("買賣主要用途篩選", usage_options_buy)
+    
+    # 租賃主要用途篩選
+    all_usages_rent = sorted(list(set(rent_df['主要用途'].dropna().unique() if not rent_df.empty else [])))
+    usage_options_rent = ["全部", "住家用", "商業用", "工業用"] + [u for u in all_usages_rent if u not in ["住家用", "商業用", "工業用", "全部"]]
+    selected_usage_rent = st.sidebar.selectbox("租賃主要用途篩選", usage_options_rent)
     
     # 坪數篩選
     ping_options = ["全部", "15坪以下 (小套房/雅房)", "15-30坪 (兩房)", "30-50坪 (三房以上)", "50坪以上 (大坪數)"]
@@ -60,20 +65,20 @@ else:
         if not rent_df.empty:
             rent_df = rent_df[rent_df['鄉鎮市區'] == selected_district]
             
-    if selected_usage != "全部":
-        df = df[df['主要用途'].str.contains(selected_usage, na=False)]
+    # 分別執行買賣與租賃的用途過濾
+    if selected_usage_buy != "全部":
+        df = df[df['主要用途'].str.contains(selected_usage_buy, na=False)]
+        
+    if selected_usage_rent != "全部":
         if not rent_df.empty:
-            rent_df = rent_df[rent_df['主要用途'].str.contains(selected_usage, na=False)]
+            rent_df = rent_df[rent_df['主要用途'].str.contains(selected_usage_rent, na=False)]
             
     # 執行坪數篩選邏輯
     if selected_ping != "全部":
         def filter_by_ping(data, col_name):
             if col_name not in data.columns: return data
-            
-            # 使用 pd.to_numeric 確保格式正確，並過濾掉沒有坪數的髒資料
             data[col_name] = pd.to_numeric(data[col_name], errors='coerce')
             data = data.dropna(subset=[col_name])
-            
             if selected_ping == "15坪以下 (小套房/雅房)":
                 return data[data[col_name] <= 15]
             elif selected_ping == "15-30坪 (兩房)":
@@ -88,12 +93,12 @@ else:
         if not rent_df.empty:
             rent_df = filter_by_ping(rent_df, '租賃坪數')
 
-    if df.empty:
-        st.warning("⚠️ 在您選擇的條件下，該季度沒有任何買賣交易紀錄。")
+    if df.empty and rent_df.empty:
+        st.warning("⚠️ 在您選擇的條件下，該季度沒有任何買賣或租賃交易紀錄。")
     else:
         st.subheader("📊 當季趨勢與投資指標")
         
-        avg_price = df['單價萬坪'].mean()
+        avg_price = df['單價萬坪'].mean() if not df.empty else 0
         total_volume = len(df)
         
         avg_rent = rent_df['租金單價坪'].mean() if not rent_df.empty else 0
@@ -101,7 +106,7 @@ else:
         yield_rate = (avg_rent * 12) / (avg_price * 10000) * 100 if avg_price > 0 and avg_rent > 0 else 0
 
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("買賣均價 (萬/坪)", f"{avg_price:.1f}" if pd.notna(avg_price) else "無", f"{total_volume}筆")
+        col1.metric("買賣均價 (萬/坪)", f"{avg_price:.1f}" if avg_price > 0 else "無", f"{total_volume}筆")
         col2.metric("租金均價 (元/坪/月)", f"{avg_rent:.0f}" if avg_rent > 0 else "無", f"{total_rent_volume}筆")
         col3.metric("估算毛投報率", f"{yield_rate:.2f}%" if yield_rate > 0 else "無資料", "")
         col4.metric("最高買賣單價 (萬/坪)", f"{df['單價萬坪'].max():.1f}" if not df.empty else "無", "")
@@ -119,8 +124,8 @@ else:
                 if temp_df is not None and not temp_df.empty:
                     if selected_district != "全部":
                         temp_df = temp_df[temp_df['鄉鎮市區'] == selected_district]
-                    if selected_usage != "全部":
-                        temp_df = temp_df[temp_df['主要用途'].str.contains(selected_usage, na=False)]
+                    if selected_usage_buy != "全部":
+                        temp_df = temp_df[temp_df['主要用途'].str.contains(selected_usage_buy, na=False)]
                     if selected_ping != "全部":
                         temp_df = filter_by_ping(temp_df, '總坪數')
                         
@@ -131,8 +136,8 @@ else:
                 if temp_rent is not None and not temp_rent.empty:
                     if selected_district != "全部":
                         temp_rent = temp_rent[temp_rent['鄉鎮市區'] == selected_district]
-                    if selected_usage != "全部":
-                        temp_rent = temp_rent[temp_rent['主要用途'].str.contains(selected_usage, na=False)]
+                    if selected_usage_rent != "全部":
+                        temp_rent = temp_rent[temp_rent['主要用途'].str.contains(selected_usage_rent, na=False)]
                     if selected_ping != "全部":
                         temp_rent = filter_by_ping(temp_rent, '租賃坪數')
                         
@@ -144,7 +149,7 @@ else:
                 history_df = pd.concat(trend_dfs, ignore_index=True)
                 trend_avg = history_df.groupby('季度')['單價萬坪'].mean().reset_index()
                 
-                st.subheader(f"📈 {city} {selected_district if selected_district != '全部' else '全市'} ({selected_usage}) - 歷史平均單價推移")
+                st.subheader(f"📈 {city} {selected_district if selected_district != '全部' else '全市'} (買賣: {selected_usage_buy}) - 歷史平均單價推移")
                 fig_trend = px.line(trend_avg, x='季度', y='單價萬坪', markers=True, text='單價萬坪')
                 fig_trend.update_traces(textposition="bottom right", texttemplate='%{text:.1f}')
                 st.plotly_chart(fig_trend, use_container_width=True)
@@ -153,7 +158,7 @@ else:
                 rent_history_df = pd.concat(rent_trend_dfs, ignore_index=True)
                 rent_trend_avg = rent_history_df.groupby('季度')['租金單價坪'].mean().reset_index()
                 
-                st.subheader(f"📉 {city} {selected_district if selected_district != '全部' else '全市'} ({selected_usage}) - 歷史租金單價推移 (元/坪/月)")
+                st.subheader(f"📉 {city} {selected_district if selected_district != '全部' else '全市'} (租賃: {selected_usage_rent}) - 歷史租金單價推移 (元/坪/月)")
                 fig_rent_trend = px.line(rent_trend_avg, x='季度', y='租金單價坪', markers=True, text='租金單價坪')
                 fig_rent_trend.update_traces(textposition="bottom right", texttemplate='%{text:.0f}')
                 fig_rent_trend.update_traces(line_color='#2ca02c')
@@ -166,8 +171,8 @@ else:
             if selected_district == "全部":
                 full_df = load_real_estate_data_v2(season=season, city_code=city_code)
                 if full_df is not None and not full_df.empty:
-                    if selected_usage != "全部":
-                        full_df = full_df[full_df['主要用途'].str.contains(selected_usage, na=False)]
+                    if selected_usage_buy != "全部":
+                        full_df = full_df[full_df['主要用途'].str.contains(selected_usage_buy, na=False)]
                     if selected_ping != "全部":
                         full_df = filter_by_ping(full_df, '總坪數')
                         
@@ -181,11 +186,18 @@ else:
 
         with col_chart2:
             st.subheader("各行政區估算毛投報率 (%)")
-            if selected_district == "全部" and not rent_df.empty:
+            if selected_district == "全部":
                 full_rent = load_rent_data_v2(season=season, city_code=city_code)
-                if not full_rent.empty:
-                    if selected_usage != "全部":
-                        full_rent = full_rent[full_rent['主要用途'].str.contains(selected_usage, na=False)]
+                full_df = load_real_estate_data_v2(season=season, city_code=city_code)
+                
+                if full_rent is not None and not full_rent.empty and full_df is not None and not full_df.empty:
+                    if selected_usage_buy != "全部":
+                        full_df = full_df[full_df['主要用途'].str.contains(selected_usage_buy, na=False)]
+                    if selected_ping != "全部":
+                        full_df = filter_by_ping(full_df, '總坪數')
+                        
+                    if selected_usage_rent != "全部":
+                        full_rent = full_rent[full_rent['主要用途'].str.contains(selected_usage_rent, na=False)]
                     if selected_ping != "全部":
                         full_rent = filter_by_ping(full_rent, '租賃坪數')
                         
@@ -209,20 +221,19 @@ else:
             else:
                 st.info("已選擇單一行政區，不顯示跨區比較。")
                 
-        st.subheader(f"📄 最新買賣交易明細 ({selected_usage} 節錄)")
-        # 加入坪數顯示
-        cols_to_show_buy = ['鄉鎮市區', '主要用途', '交易年月日', '單價萬坪']
-        if '總坪數' in df.columns: cols_to_show_buy.append('總坪數')
-        cols_to_show_buy.append('總價元')
-        st.dataframe(df[cols_to_show_buy].head(10), use_container_width=True)
-        
+        if not df.empty:
+            st.subheader(f"📄 最新買賣交易明細 (買賣用途: {selected_usage_buy} 節錄)")
+            cols_to_show_buy = ['鄉鎮市區', '主要用途', '交易年月日', '單價萬坪']
+            if '總坪數' in df.columns: cols_to_show_buy.append('總坪數')
+            cols_to_show_buy.append('總價元')
+            st.dataframe(df[cols_to_show_buy].head(10), use_container_width=True)
+            
         if not rent_df.empty:
-            st.subheader(f"📄 最新租賃交易明細 ({selected_usage} 節錄)")
+            st.subheader(f"📄 最新租賃交易明細 (租賃用途: {selected_usage_rent} 節錄)")
             cols_to_show_rent = ['鄉鎮市區', '主要用途', '租賃年月日', '租金單價坪']
             if '租賃坪數' in rent_df.columns: cols_to_show_rent.append('租賃坪數')
             if '建物現況格局-房' in rent_df.columns: cols_to_show_rent.append('建物現況格局-房')
             if '建物現況格局-廳' in rent_df.columns: cols_to_show_rent.append('建物現況格局-廳')
             cols_to_show_rent.append('總額元')
-            # 確保欄位存在再顯示
             cols_to_show_rent = [c for c in cols_to_show_rent if c in rent_df.columns]
             st.dataframe(rent_df[cols_to_show_rent].head(10), use_container_width=True)
