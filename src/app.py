@@ -59,7 +59,13 @@ else:
     df_rent = apply_filters(df_rent_raw, is_rent=True)
 
     # 建立頁籤
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 市場總覽與歷史趨勢", "🎯 投資熱區雷達 (投報率)", "📐 產品定位分析 (坪數)", "📄 原始資料明細"])
+    tab1, tab2, tab3, tab_calc, tab4 = st.tabs([
+        "📊 市場總覽與歷史趨勢", 
+        "🎯 投資熱區雷達 (投報率)", 
+        "📐 產品定位分析 (坪數)", 
+        "💼 包租代管 實戰投報算盤", 
+        "📄 原始資料明細"
+    ])
 
     # ---------------- TAB 1: 市場總覽 ----------------
     with tab1:
@@ -133,13 +139,11 @@ else:
         if df_buy_raw.empty or df_rent_raw.empty:
             st.warning("資料不足，無法進行跨區比較。")
         else:
-            # 使用未過濾行政區的資料來跨區比較，但保留用途過濾
             full_buy = df_buy_raw.copy()
             full_rent = df_rent_raw.copy()
             if selected_usage_buy != "全部": full_buy = full_buy[full_buy['主要用途'].str.contains(selected_usage_buy, na=False)]
             if selected_usage_rent != "全部": full_rent = full_rent[full_rent['主要用途'].str.contains(selected_usage_rent, na=False)]
             
-            # 統計各區數據
             dist_buy = full_buy.groupby('鄉鎮市區').agg(買賣單價萬坪=('單價萬坪','mean'), 買賣交易量=('單價萬坪','count')).reset_index()
             dist_rent = full_rent.groupby('鄉鎮市區').agg(租金單價坪=('租金單價坪','mean'), 租賃交易量=('租金單價坪','count')).reset_index()
             
@@ -160,7 +164,6 @@ else:
                 fig_scatter = px.scatter(merged_dist, x='買賣單價萬坪', y='租金單價坪', size='租賃交易量', color='鄉鎮市區',
                                          hover_name='鄉鎮市區', size_max=40,
                                          labels={'買賣單價萬坪': "平均取得成本 (萬/坪)", '租金單價坪': "平均租金行情 (元/坪)"})
-                # 加入輔助十字線 (均值)
                 fig_scatter.add_vline(x=merged_dist['買賣單價萬坪'].mean(), line_dash="dash", line_color="gray", opacity=0.5)
                 fig_scatter.add_hline(y=merged_dist['租金單價坪'].mean(), line_dash="dash", line_color="gray", opacity=0.5)
                 st.plotly_chart(fig_scatter, use_container_width=True)
@@ -206,6 +209,93 @@ else:
             st.plotly_chart(fig_bar_ping, use_container_width=True)
         else:
             st.warning("資料缺乏坪數資訊，無法進行分析。")
+
+    # ---------------- TAB CALC: 包租代管實戰投報算盤 ----------------
+    with tab_calc:
+        st.subheader("💼 第一層：低租金收房雷達 (Acquisition Radar)")
+        st.markdown("比對潛在案源開價與區域標準均價，自動偵測「租金折價物件」。")
+        
+        # 使用目前條件（區、用途）計算基準均價
+        base_rent_price = df_rent['租金單價坪'].mean() if not df_rent.empty else 0
+        
+        col_r1, col_r2 = st.columns(2)
+        with col_r1:
+            target_ping = st.number_input("輸入潛在物件坪數 (坪)", value=25.0, min_value=1.0)
+            target_rent = st.number_input("輸入屋主開出之每月總租金 (元)", value=30000, min_value=0, step=1000)
+            
+        with col_r2:
+            st.info(f"📍 **當前市場基準：**\n\n根據實價登錄，{city} {selected_district if selected_district != '全部' else '全市'} ({selected_usage_rent}) 平均租金為 **{base_rent_price:.0f} 元/坪**。")
+            if target_ping > 0 and target_rent > 0 and base_rent_price > 0:
+                target_unit_rent = target_rent / target_ping
+                discount_rate = ((base_rent_price - target_unit_rent) / base_rent_price) * 100
+                st.metric("潛在案源 單價", f"{target_unit_rent:.0f} 元/坪")
+                
+                if discount_rate >= 15:
+                    st.success(f"🔥 **強烈建議收房！** 此物件單價低於區域均價 **{discount_rate:.1f}%**。")
+                elif discount_rate > 0:
+                    st.warning(f"✅ **具備潛力：** 此物件低於區域均價 **{discount_rate:.1f}%**，可進一步談判。")
+                else:
+                    st.error(f"❌ **溢價物件：** 此物件高於區域均價 **{abs(discount_rate):.1f}%**，收房利潤空間極小。")
+                    
+        st.markdown("**🔍 目標特徵鎖定建議：** 優先尋找「長期無實價登錄租賃紀錄的空屋」或「無附屬設備的毛胚/簡裝屋」，這類屋主通常怕麻煩，容易談出 15%~20% 的折價空間。")
+
+        st.markdown("---")
+        st.subheader("🚀 第二層：高毛利利基市場溢價分析 (Niche Premium Calculator)")
+        st.markdown("收房後，計算套用不同「利基型態」策略所能創造的極大化租金收益與價差。")
+        
+        niche_strategy = st.radio("選擇改裝與運營策略", ["寵物友善精裝 (+15% 溢價)", "高階商務/外商配置 (+25% 溢價)", "風格共生公寓/分租 (+30% 溢價)", "自訂溢價"])
+        
+        premium_pct = 0
+        if "15%" in niche_strategy: premium_pct = 15
+        elif "25%" in niche_strategy: premium_pct = 25
+        elif "30%" in niche_strategy: premium_pct = 30
+        else: premium_pct = st.number_input("自訂溢價幅度 (%)", value=20.0)
+        
+        expected_premium_rent = base_rent_price * (1 + premium_pct/100) * target_ping if base_rent_price > 0 else 0
+        monthly_spread = expected_premium_rent - target_rent
+        
+        col_n1, col_n2, col_n3 = st.columns(3)
+        col_n1.metric("利基市場 預估出租價", f"{expected_premium_rent:,.0f} 元/月")
+        col_n2.metric("收房成本", f"{target_rent:,.0f} 元/月")
+        col_n3.metric("💎 每月創造淨價差", f"{monthly_spread:,.0f} 元/月" if monthly_spread > 0 else "虧損", "利潤池成型")
+
+        st.markdown("---")
+        st.subheader("💰 第三層：現金回收期與真實 ROI 試算 (Financial Simulation)")
+        st.markdown("賺價差是一回事，**「錢多久能回本」**才是擴張的關鍵！動態調整成本端參數來進行壓力測試。")
+
+        cc1, cc2 = st.columns(2)
+        with cc1:
+            st.markdown("**成本端參數 (投入)**")
+            capex = st.slider("預估前期總投入 (軟裝、油漆、家電、行銷) [萬元]", 0, 200, 30, step=1) * 10000
+            deposit_months = st.slider("押金成本 (押給原屋主的月數)", 0, 3, 2)
+            deposit_cost = deposit_months * target_rent
+            contract_years = st.slider("包租合約期 (年)", 1, 10, 5)
+            vacancy_days_per_year = st.slider("每年預估空窗期 (天)", 0, 60, 15)
+            
+        with cc2:
+            st.markdown("**決策端輸出 (回報)**")
+            if monthly_spread > 0:
+                # 計算回收期 (不含押金，因為押金會退)
+                months_to_breakeven = capex / monthly_spread
+                st.metric("⏳ 資金回收期 (不含押金)", f"{months_to_breakeven:.1f} 個月")
+                
+                # 計算合約期內總淨利
+                total_months = contract_years * 12
+                vacancy_months_total = (vacancy_days_per_year / 30) * contract_years
+                effective_rent_months = total_months - vacancy_months_total
+                
+                total_net_profit = (expected_premium_rent * effective_rent_months) - (target_rent * total_months) - capex
+                st.metric("💵 合約期內總淨利", f"{total_net_profit:,.0f} 元")
+                
+                # 現金投資報酬率 Cash-on-Cash Return (年化)
+                # 每年的平均淨現金流 / 前期總流出現金 (Capex + 押金)
+                annual_cash_flow = total_net_profit / contract_years
+                total_cash_out = capex + deposit_cost
+                cash_on_cash_roi = (annual_cash_flow / total_cash_out) * 100 if total_cash_out > 0 else 0
+                
+                st.metric("📈 真實現金投資報酬率 (CoC ROI)", f"{cash_on_cash_roi:.1f} % / 年")
+            else:
+                st.error("每月淨價差為負，此專案不可行！請重新評估收房成本或提升溢價策略。")
 
     # ---------------- TAB 4: 原始資料明細 ----------------
     with tab4:
