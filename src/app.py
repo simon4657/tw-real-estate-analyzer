@@ -73,7 +73,7 @@ else:
 
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("取得成本均價 (萬/坪)", f"{avg_price:.1f}" if avg_price > 0 else "無", f"買賣 {total_buy_vol} 筆")
-        col2.metric("租金收益均價 (元/坪)", f"{avg_rent:.0f}" if avg_rent > 0 else "無", f"租賃 {total_rent_vol} 筆")
+        col2.metric("租金行情均價 (元/坪/月)", f"{avg_rent:.0f}" if avg_rent > 0 else "無", f"租賃 {total_rent_vol} 筆")
         col3.metric("本區平均 毛投報率", f"{yield_rate:.2f}%" if yield_rate > 0 else "無資料", "")
         col4.metric("最高租金單價 (元/坪)", f"{df_rent['租金單價坪'].max():.0f}" if not df_rent.empty else "無", "")
 
@@ -103,7 +103,9 @@ else:
             if trend_dfs:
                 history_df = pd.DataFrame(trend_dfs)
                 
-                c1, c2 = st.columns(2)
+                st.subheader(f"📈 {city} {selected_district if selected_district != '全部' else '全市'} - 歷史推移分析")
+                
+                c1, c2, c3 = st.columns(3)
                 with c1:
                     price_trend = history_df[history_df['指標'] == '買賣單價(萬/坪)']
                     if not price_trend.empty:
@@ -111,6 +113,12 @@ else:
                         fig_p.update_traces(texttemplate='%{text:.1f}', textposition="bottom right")
                         st.plotly_chart(fig_p, use_container_width=True)
                 with c2:
+                    rent_trend = history_df[history_df['指標'] == '租金單價(元/坪)']
+                    if not rent_trend.empty:
+                        fig_r = px.line(rent_trend, x='季度', y='數值', markers=True, title="租金行情走勢 (元/坪/月)", text='數值')
+                        fig_r.update_traces(line_color='#2ca02c', texttemplate='%{text:.0f}', textposition="bottom right")
+                        st.plotly_chart(fig_r, use_container_width=True)
+                with c3:
                     yield_trend = history_df[history_df['指標'] == '毛投報率(%)']
                     if not yield_trend.empty:
                         fig_y = px.line(yield_trend, x='季度', y='數值', markers=True, title="毛投報率走勢 (%)", text='數值')
@@ -151,7 +159,7 @@ else:
                 st.info("💡 位於 **左上角** 的氣泡代表：房價取得成本低，但租金收益高。氣泡越大代表租屋需求越高！")
                 fig_scatter = px.scatter(merged_dist, x='買賣單價萬坪', y='租金單價坪', size='租賃交易量', color='鄉鎮市區',
                                          hover_name='鄉鎮市區', size_max=40,
-                                         labels={'買賣單價萬坪': "平均取得成本 (萬/坪)", '租金單價坪': "平均租金收益 (元/坪)"})
+                                         labels={'買賣單價萬坪': "平均取得成本 (萬/坪)", '租金單價坪': "平均租金行情 (元/坪)"})
                 # 加入輔助十字線 (均值)
                 fig_scatter.add_vline(x=merged_dist['買賣單價萬坪'].mean(), line_dash="dash", line_color="gray", opacity=0.5)
                 fig_scatter.add_hline(y=merged_dist['租金單價坪'].mean(), line_dash="dash", line_color="gray", opacity=0.5)
@@ -160,7 +168,7 @@ else:
     # ---------------- TAB 3: 產品定位分析 ----------------
     with tab3:
         st.subheader("📐 物件坪數配置與收益分析")
-        st.markdown("分析不同坪數級距（如小套房、兩房、大坪數）的租賃需求與投報表現，決定進場標的類型。")
+        st.markdown("分析不同坪數級距（如小套房、兩房、大坪數）的租金行情與投報表現，決定進場標的類型。")
         
         def categorize_ping(p):
             if pd.isna(p): return "未知"
@@ -189,9 +197,13 @@ else:
                 fig_pie = px.pie(ping_merged, values='租賃需求', names='坪數級距', hole=0.4, color_discrete_sequence=px.colors.sequential.Teal)
                 st.plotly_chart(fig_pie, use_container_width=True)
             with col_p2:
-                st.markdown("**各坪數級距 - 估算毛投報率**")
-                fig_bar_ping = px.bar(ping_merged.sort_values('坪數級距'), x='坪數級距', y='毛投報率(%)', text_auto='.2f', color='毛投報率(%)', color_continuous_scale='Blues')
-                st.plotly_chart(fig_bar_ping, use_container_width=True)
+                st.markdown("**各坪數級距 - 租金行情 (元/坪)**")
+                fig_bar_rent = px.bar(ping_merged.sort_values('坪數級距'), x='坪數級距', y='租金均價', text_auto='.0f', color='租金均價', color_continuous_scale='Greens')
+                st.plotly_chart(fig_bar_rent, use_container_width=True)
+                
+            st.markdown("**各坪數級距 - 估算毛投報率**")
+            fig_bar_ping = px.bar(ping_merged.sort_values('坪數級距'), x='坪數級距', y='毛投報率(%)', text_auto='.2f', color='毛投報率(%)', color_continuous_scale='Blues')
+            st.plotly_chart(fig_bar_ping, use_container_width=True)
         else:
             st.warning("資料缺乏坪數資訊，無法進行分析。")
 
